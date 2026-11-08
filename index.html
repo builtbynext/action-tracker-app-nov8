@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Action Tracker</title>
+<style>
+  :root {
+    --bg: #f4f3f0;
+    --card: #ffffff;
+    --ink: #2b2a28;
+    --muted: #8a8780;
+    --line: #e7e4de;
+    --accent: #e8702a;
+    --accent-soft: #fdf0e7;
+    --overdue: #c0392b;
+    --overdue-soft: #fbeceb;
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 18px;
+    line-height: 1.5;
+  }
+  main { max-width: 960px; margin: 0 auto; padding: 48px 20px 80px; }
+  header h1 { font-size: 2.2rem; margin: 0 0 4px; letter-spacing: -0.02em; }
+  header p { margin: 0; color: var(--muted); }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 24px;
+  }
+
+  /* Stats */
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 32px 0 24px; }
+  .stat .num { font-size: 2.6rem; font-weight: 700; line-height: 1.1; }
+  .stat .label { color: var(--muted); font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  .stat.open .num { color: var(--accent); }
+  .stat.overdue .num { color: var(--ink); }
+  .stat.overdue.has .num { color: var(--overdue); }
+  .stat.overdue.has { background: var(--overdue-soft); border-color: #efc9c5; }
+
+  /* Form */
+  form { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 12px; align-items: end; }
+  label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+  input[type=text], input[type=date] {
+    width: 100%;
+    font: inherit;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #fbfaf8;
+    color: var(--ink);
+  }
+  input:focus { outline: 2px solid var(--accent); outline-offset: 1px; background: #fff; }
+  input.invalid { border-color: var(--overdue); background: var(--overdue-soft); }
+  button.add {
+    font: inherit; font-weight: 600;
+    background: var(--accent); color: #fff;
+    border: 0; border-radius: 10px;
+    padding: 12px 22px; cursor: pointer;
+  }
+  button.add:hover { filter: brightness(0.93); }
+  .hint { grid-column: 1 / -1; color: var(--overdue); font-size: 0.95rem; min-height: 1.4em; margin: 0; }
+
+  /* Groups */
+  .groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 20px; margin-top: 28px; }
+  .group h2 { display: flex; justify-content: space-between; align-items: baseline; font-size: 1.35rem; margin: 0 0 14px; }
+  .group h2 small { color: var(--muted); font-size: 0.9rem; font-weight: 400; }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li.item {
+    display: flex; gap: 14px; align-items: flex-start;
+    padding: 14px 12px; border-top: 1px solid var(--line);
+    border-radius: 10px;
+  }
+  li.item:first-child { border-top: 0; }
+  li.item input[type=checkbox] {
+    appearance: none; -webkit-appearance: none;
+    width: 26px; height: 26px; flex: none; margin-top: 2px;
+    border: 2px solid #c9c5bc; border-radius: 8px;
+    background: #fff; cursor: pointer; position: relative;
+  }
+  li.item input[type=checkbox]:checked { background: var(--accent); border-color: var(--accent); }
+  li.item input[type=checkbox]:checked::after {
+    content: ""; position: absolute; left: 7px; top: 2px; width: 6px; height: 12px;
+    border: solid #fff; border-width: 0 3px 3px 0; transform: rotate(45deg);
+  }
+  li.item input[type=checkbox]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .body { flex: 1; min-width: 0; }
+  .text { word-wrap: break-word; }
+  .due { font-size: 0.9rem; color: var(--muted); margin-top: 2px; }
+  li.item.done .text { text-decoration: line-through; color: var(--muted); }
+  li.item.overdue { background: var(--overdue-soft); }
+  li.item.overdue .text { color: var(--overdue); font-weight: 600; }
+  li.item.overdue .due { color: var(--overdue); font-weight: 600; }
+  button.del {
+    background: none; border: 0; color: var(--muted); font-size: 1.4rem; line-height: 1;
+    cursor: pointer; padding: 2px 6px; border-radius: 6px; opacity: 0.5;
+  }
+  button.del:hover { opacity: 1; color: var(--overdue); }
+  .empty { text-align: center; color: var(--muted); padding: 40px 20px; }
+  .toolbar { display: flex; justify-content: flex-end; margin-top: 28px; }
+  button.link { background: none; border: 0; color: var(--muted); font: inherit; font-size: 0.9rem; cursor: pointer; text-decoration: underline; }
+  button.link:hover { color: var(--accent); }
+
+  @media (max-width: 760px) {
+    form { grid-template-columns: 1fr; }
+    .groups { grid-template-columns: 1fr; }
+    .stats { gap: 10px; }
+    .stat .num { font-size: 2rem; }
+    .card { padding: 18px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Action Tracker</h1>
+    <p>Agree it. Own it. Close it. <span id="today"></span></p>
+  </header>
+
+  <section class="stats" aria-label="Summary">
+    <div class="card stat open"><div class="num" id="nOpen">0</div><div class="label">Open</div></div>
+    <div class="card stat done"><div class="num" id="nDone">0</div><div class="label">Done</div></div>
+    <div class="card stat overdue" id="overdueCard"><div class="num" id="nOver">0</div><div class="label">Overdue</div></div>
+  </section>
+
+  <section class="card">
+    <form id="form" novalidate>
+      <div>
+        <label for="text">Action</label>
+        <input type="text" id="text" placeholder="e.g. Send revised rota to stores" autocomplete="off">
+      </div>
+      <div>
+        <label for="owner">Owner</label>
+        <input type="text" id="owner" list="owners" placeholder="Name" autocomplete="off">
+        <datalist id="owners"></datalist>
+      </div>
+      <div>
+        <label for="due">Due date</label>
+        <input type="date" id="due">
+      </div>
+      <button class="add" type="submit">Add action</button>
+      <p class="hint" id="hint" role="alert"></p>
+    </form>
+  </section>
+
+  <section class="groups" id="groups"></section>
+  <div class="toolbar"><button class="link" id="clearDone" type="button">Clear completed actions</button></div>
+</main>
+
+<script>
+(function () {
+  var KEY = "meeting-action-tracker-v1";
+  var actions = load();
+
+  function load() {
+    try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch (e) { return []; }
+  }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(actions)); } catch (e) { /* storage unavailable */ }
+  }
+  function todayISO() {
+    var d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+  var MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  function fmt(iso) {
+    var p = iso.split("-");
+    return parseInt(p[2], 10) + " " + MONTHS[parseInt(p[1], 10) - 1] + " " + p[0];
+  }
+  function daysBetween(fromISO, toISO) {
+    var a = new Date(fromISO + "T00:00:00"), b = new Date(toISO + "T00:00:00");
+    return Math.round((b - a) / 86400000);
+  }
+  function isOverdue(a) { return !a.done && a.due < todayISO(); }
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function dueLabel(a) {
+    var diff = daysBetween(todayISO(), a.due);
+    if (a.done) return "Due " + fmt(a.due);
+    if (diff < 0) return "Overdue by " + (-diff) + (diff === -1 ? " day" : " days") + " · " + fmt(a.due);
+    if (diff === 0) return "Due today · " + fmt(a.due);
+    if (diff === 1) return "Due tomorrow · " + fmt(a.due);
+    return "Due " + fmt(a.due);
+  }
+
+  function render() {
+    var open = 0, done = 0, over = 0;
+    actions.forEach(function (a) {
+      if (a.done) done++; else open++;
+      if (isOverdue(a)) over++;
+    });
+    document.getElementById("nOpen").textContent = open;
+    document.getElementById("nDone").textContent = done;
+    document.getElementById("nOver").textContent = over;
+    document.getElementById("overdueCard").classList.toggle("has", over > 0);
+    document.getElementById("today").textContent = "Today is " + fmt(todayISO()) + ".";
+
+    // Owners datalist
+    var owners = {};
+    actions.forEach(function (a) { owners[a.owner] = true; });
+    var dl = document.getElementById("owners");
+    dl.textContent = "";
+    Object.keys(owners).sort().forEach(function (o) {
+      var opt = document.createElement("option"); opt.value = o; dl.appendChild(opt);
+    });
+
+    // Groups
+    var root = document.getElementById("groups");
+    root.textContent = "";
+    var names = Object.keys(owners).sort(function (a, b) { return a.localeCompare(b, "en-GB"); });
+    if (!names.length) {
+      var empty = el("div", "card empty", "No actions yet. Add the first one above so nothing gets forgotten.");
+      empty.style.gridColumn = "1 / -1";
+      root.appendChild(empty);
+      return;
+    }
+    names.forEach(function (name) {
+      var mine = actions.filter(function (a) { return a.owner === name; });
+      mine.sort(function (a, b) {
+        if (a.done !== b.done) return a.done ? 1 : -1;
+        return a.due.localeCompare(b.due);
+      });
+      var openCount = mine.filter(function (a) { return !a.done; }).length;
+      var card = el("div", "card group");
+      var h = el("h2", null, name);
+      h.appendChild(el("small", null, openCount + " open · " + (mine.length - openCount) + " done"));
+      card.appendChild(h);
+      var ul = el("ul");
+      mine.forEach(function (a) {
+        var li = el("li", "item" + (a.done ? " done" : "") + (isOverdue(a) ? " overdue" : ""));
+        var cb = document.createElement("input");
+        cb.type = "checkbox"; cb.checked = a.done;
+        cb.setAttribute("aria-label", "Mark done: " + a.text);
+        cb.addEventListener("change", function () { a.done = cb.checked; save(); render(); });
+        var body = el("div", "body");
+        body.appendChild(el("div", "text", a.text));
+        body.appendChild(el("div", "due", dueLabel(a)));
+        var del = el("button", "del", "×");
+        del.type = "button"; del.title = "Delete action"; del.setAttribute("aria-label", "Delete: " + a.text);
+        del.addEventListener("click", function () {
+          actions = actions.filter(function (x) { return x.id !== a.id; });
+          save(); render();
+        });
+        li.appendChild(cb); li.appendChild(body); li.appendChild(del);
+        ul.appendChild(li);
+      });
+      card.appendChild(ul);
+      root.appendChild(card);
+    });
+  }
+
+  document.getElementById("form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var t = document.getElementById("text"), o = document.getElementById("owner"), d = document.getElementById("due");
+    var missing = [];
+    [[t, "action"], [o, "owner"], [d, "due date"]].forEach(function (pair) {
+      var bad = !pair[0].value.trim();
+      pair[0].classList.toggle("invalid", bad);
+      if (bad) missing.push(pair[1]);
+    });
+    var hint = document.getElementById("hint");
+    if (missing.length) { hint.textContent = "Missing: " + missing.join(", ") + ". Every action needs all three."; return; }
+    hint.textContent = "";
+    actions.push({
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      text: t.value.trim(), owner: o.value.trim(), due: d.value, done: false
+    });
+    save();
+    t.value = ""; d.value = "";
+    render();
+    t.focus();
+  });
+
+  document.getElementById("clearDone").addEventListener("click", function () {
+    var n = actions.filter(function (a) { return a.done; }).length;
+    if (!n) return;
+    if (confirm("Remove " + n + " completed " + (n === 1 ? "action" : "actions") + "?")) {
+      actions = actions.filter(function (a) { return !a.done; });
+      save(); render();
+    }
+  });
+
+  // Default due date: one week from today
+  (function () {
+    var d = new Date(); d.setDate(d.getDate() + 7);
+    document.getElementById("due").value = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  })();
+
+  render();
+})();
+</script>
+</body>
+</html>
