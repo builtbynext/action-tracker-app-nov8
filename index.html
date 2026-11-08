@@ -156,14 +156,48 @@
 
 <script>
 (function () {
-  var KEY = "meeting-action-tracker-v1";
-  var actions = load();
+  // Supabase connection (publishable key is safe to expose; access is governed by row-level security)
+  var SUPABASE_URL = "https://ypzeqtlhuulhtftnphqi.supabase.co";
+  var SUPABASE_KEY = "sb_publishable_f5kvqPYsxPoPRqjCwshPpA_MoH5tmvH";
+  var TABLE = SUPABASE_URL + "/rest/v1/actions";
+  var CACHE_KEY = "meeting-action-tracker-cache-v2";
+  var actions = readCache();
+  var loaded = actions.length > 0;
 
-  function load() {
-    try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch (e) { return []; }
+  function readCache() {
+    try { return JSON.parse(localStorage.getItem(CACHE_KEY)) || []; } catch (e) { return []; }
   }
-  function save() {
-    try { localStorage.setItem(KEY, JSON.stringify(actions)); } catch (e) { /* storage unavailable */ }
+  function writeCache() {
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify(actions)); } catch (e) { /* storage unavailable */ }
+  }
+  function setStatus(msg) { document.getElementById("hint").textContent = msg || ""; }
+
+  function api(method, query, body) {
+    return fetch(TABLE + (query || ""), {
+      method: method,
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: "Bearer " + SUPABASE_KEY,
+        "Content-Type": "application/json",
+        Prefer: "return=representation"
+      },
+      body: body ? JSON.stringify(body) : undefined
+    }).then(function (r) {
+      if (!r.ok) throw new Error("Request failed (" + r.status + ")");
+      return r.status === 204 ? [] : r.json();
+    });
+  }
+  function fail(err) {
+    setStatus("Could not sync with the database: " + err.message + ". Showing the last saved list.");
+    refresh();
+  }
+  function refresh() {
+    return api("GET", "?select=id,text,owner,due,done&order=due.asc").then(function (rows) {
+      actions = rows; loaded = true; writeCache(); render();
+    }).catch(function (err) {
+      if (!loaded) setStatus("Could not load actions: " + err.message);
+      render();
+    });
   }
   function todayISO() {
     var d = new Date();
@@ -242,7 +276,10 @@
         var cb = document.createElement("input");
         cb.type = "checkbox"; cb.checked = a.done;
         cb.setAttribute("aria-label", "Mark done: " + a.text);
-        cb.addEventListener("change", function () { a.done = cb.checked; save(); render(); });
+        cb.addEventListener("change", function () {
+          a.done = cb.checked; writeCache(); render();
+          api("PATCH", "?id=eq." + a.id, { done: a.done }).catch(fail);
+        });
         var body = el("div", "body");
         body.appendChild(el("div", "text", a.text));
         body.appendChild(el("div", "due", dueLabel(a)));
@@ -250,7 +287,8 @@
         del.type = "button"; del.title = "Delete action"; del.setAttribute("aria-label", "Delete: " + a.text);
         del.addEventListener("click", function () {
           actions = actions.filter(function (x) { return x.id !== a.id; });
-          save(); render();
+          writeCache(); render();
+          api("DELETE", "?id=eq." + a.id).catch(fail);
         });
         li.appendChild(cb); li.appendChild(body); li.appendChild(del);
         ul.appendChild(li);
@@ -272,13 +310,11 @@
     var hint = document.getElementById("hint");
     if (missing.length) { hint.textContent = "Missing: " + missing.join(", ") + ". Every action needs all three."; return; }
     hint.textContent = "";
-    actions.push({
-      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-      text: t.value.trim(), owner: o.value.trim(), due: d.value, done: false
-    });
-    save();
-    t.value = ""; d.value = "";
-    render();
+    var row = { text: t.value.trim(), owner: o.value.trim(), due: d.value, done: false };
+    api("POST", "", row).then(function (created) {
+      actions.push(created[0]); writeCache(); render();
+    }).catch(fail);
+    t.value = "";
     t.focus();
   });
 
@@ -287,7 +323,8 @@
     if (!n) return;
     if (confirm("Remove " + n + " completed " + (n === 1 ? "action" : "actions") + "?")) {
       actions = actions.filter(function (a) { return !a.done; });
-      save(); render();
+      writeCache(); render();
+      api("DELETE", "?done=eq.true").catch(fail);
     }
   });
 
@@ -298,6 +335,10 @@
   })();
 
   render();
+  refresh();
+  // Pick up teammates' changes
+  setInterval(refresh, 30000);
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) refresh(); });
 })();
 </script>
 </body>
